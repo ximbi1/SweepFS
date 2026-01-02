@@ -23,6 +23,10 @@ type FSScanner struct {
 	exclusions  map[string]struct{}
 	maxDepth    int
 	root        string
+	cacheEntries map[string]cacheEntry
+	cacheLoaded  bool
+	cachePath    string
+	cacheHiddenFlag bool
 }
 
 type fileJob struct {
@@ -36,6 +40,10 @@ type fileResult struct {
 }
 
 func NewFSScanner() *FSScanner {
+	cachePath, err := cacheFilePath()
+	if err != nil {
+		cachePath = ""
+	}
 	return &FSScanner{
 		cache:       make(map[string]*domain.Node),
 		scannedDirs: make(map[string]bool),
@@ -45,6 +53,7 @@ func NewFSScanner() *FSScanner {
 			".cache":       {},
 		},
 		maxDepth: 0,
+		cachePath: cachePath,
 	}
 }
 
@@ -104,11 +113,21 @@ func (scanner *FSScanner) Invalidate(path string) {
 func (scanner *FSScanner) Scan(ctx context.Context, req ScanRequest) (ScanResult, error) {
 	start := time.Now()
 	root := cleanPath(req.RootPath)
+	if err := scanner.loadCache(); err != nil {
+		progressNonBlocking(scanner.progress, ScanProgress{Path: root, ErrMessage: err.Error()})
+	}
 	progress := make(chan ScanProgress, 64)
 	if err := scanner.setProgress(progress); err != nil {
 		return ScanResult{}, err
 	}
 	defer close(progress)
+
+	if scanner.canReuseRoot(root, req.ShowHidden) {
+		nodes := scanner.cachedTree(root)
+		scanner.replaceCache(root, nodes)
+		progressNonBlocking(progress, ScanProgress{Path: root, Scanned: 0, Completed: true})
+		return ScanResult{RootPath: root, Duration: time.Since(start)}, nil
+	}
 
 	if scanner.isCached(root) {
 		scanner.mu.Lock()
@@ -200,6 +219,11 @@ func (scanner *FSScanner) Scan(ctx context.Context, req ScanRequest) (ScanResult
 		}
 
 		if entry.IsDir() {
+			if scanner.canReuseDir(path, entry, req.ShowHidden) {
+				scanner.mergeCachedSubtree(path, nodes, &nodesMu)
+				progressNonBlocking(progress, ScanProgress{Path: path, Scanned: scannedCount, Current: path})
+				return filepath.SkipDir
+			}
 			nodesMu.Lock()
 			nodes[path] = &domain.Node{
 				ID:       path,
@@ -245,6 +269,7 @@ func (scanner *FSScanner) Scan(ctx context.Context, req ScanRequest) (ScanResult
 	nodesMu.Unlock()
 
 	scanner.replaceCache(root, nodes)
+	scanner.saveCache(nodes, req.ShowHidden)
 	progress <- ScanProgress{Path: root, Scanned: scannedCount, Completed: true}
 
 	return ScanResult{RootPath: root, Duration: time.Since(start)}, nil

@@ -548,6 +548,11 @@ func (model Model) handleBackupNameInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (model Model) handleCompressionChoice(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.Type == tea.KeyEsc {
+		model.awaitingCompression = false
+		model.status = "Compression choice cancelled"
+		return model, nil
+	}
 	if msg.Type != tea.KeyRunes {
 		return model, nil
 	}

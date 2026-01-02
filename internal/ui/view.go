@@ -165,9 +165,6 @@ func renderTreePanel(model Model, styles uiStyles, visible []state.VisibleNode, 
 		if node.Type == domain.NodeDir {
 			name += "/"
 		}
-		if node.Type == domain.NodeDir && !node.Scanned {
-			name += " (loading...)"
-		}
 		lineSize := fmt.Sprintf("%*s", sizeWidth, sizeLabel(node))
 		line := fmt.Sprintf("%s %s %s%s %s", lineSize, marker, indent, icon, name)
 		if index == model.state.Cursor {

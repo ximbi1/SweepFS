@@ -106,4 +106,4 @@ make fmt
 
 ## Release
 
-Current release: `v0.1.0` (see `CHANGELOG.md`).
+Current release: `v0.2.0` (see `CHANGELOG.md`).

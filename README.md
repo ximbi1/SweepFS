@@ -44,6 +44,8 @@ sweepfs
 - Refresh: `r`
 - Sort: `o`
 - Hidden: `h`
+- Search: `/`
+- Filters: `e` extension, `z` min size, `x` clear
 - Destination: navigate + `p` paste, or type path + `tab` autocomplete
 - Backup flow: choose destination → name → compress (y/n)
 - Operations: `d` delete, `m` move, `c` copy, `b` backup

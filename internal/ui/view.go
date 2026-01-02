@@ -95,8 +95,9 @@ func renderFooter(model Model, styles uiStyles) string {
 	if model.state.Prefs.ShowHidden {
 		hiddenInfo = "Hidden: on"
 	}
-	left := fmt.Sprintf("%s  %s  %s", selectionInfo, sortInfo, hiddenInfo)
-	keys := "↑/↓ move  → enter  ← up  enter expand  s scan  o sort  h hidden  p paste  r refresh  ? help  q quit"
+	filterInfo := filterSummary(model)
+	left := fmt.Sprintf("%s  %s  %s%s", selectionInfo, sortInfo, hiddenInfo, filterInfo)
+	keys := "↑/↓ move  → enter  ← up  enter expand  s scan  / search  e ext  z min  x clear  o sort  h hidden  p paste  r refresh  ? help  q quit"
 	if model.confirming {
 		keys = "y confirm  n cancel"
 	}
@@ -310,6 +311,10 @@ func renderHelpView(model Model, styles uiStyles) string {
 		model.keys.Sort,
 		model.keys.Hidden,
 		model.keys.Paste,
+		model.keys.Search,
+		model.keys.ExtFilter,
+		model.keys.SizeFilter,
+		model.keys.ClearFilter,
 		model.keys.Confirm,
 		model.keys.Cancel,
 		model.keys.Help,
@@ -322,7 +327,7 @@ func renderHelpView(model Model, styles uiStyles) string {
 	lines = append(lines, "", styles.headerStyle.Render("Selection"))
 	lines = append(lines, "space toggle select", "selection counted in footer")
 	lines = append(lines, "", styles.headerStyle.Render("Actions"))
-	lines = append(lines, "s scan", "r refresh", "o sort", "h hidden")
+	lines = append(lines, "s scan", "r refresh", "o sort", "h hidden", "/ search", "e ext filter", "z size filter", "x clear")
 	lines = append(lines, "", styles.headerStyle.Render("Operations"))
 	lines = append(lines, "d delete", "m move", "c copy", "b backup (name + compress)", "p paste dest")
 	lines = append(lines, "", styles.headerStyle.Render("Safety"))
@@ -447,6 +452,23 @@ func trimStatus(message string, width int) string {
 		return message
 	}
 	return message[:max] + "..."
+}
+
+func filterSummary(model Model) string {
+	parts := []string{}
+	if model.state.SearchQuery != "" {
+		parts = append(parts, fmt.Sprintf("Search:%s", model.state.SearchQuery))
+	}
+	if model.state.FilterExt != "" {
+		parts = append(parts, fmt.Sprintf("Ext:%s", model.state.FilterExt))
+	}
+	if model.state.MinSizeBytes > 0 {
+		parts = append(parts, fmt.Sprintf("Min:%s", formatSize(model.state.MinSizeBytes)))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "  Filters[" + strings.Join(parts, ", ") + "]"
 }
 
 func clamp(value, min, max int) int {

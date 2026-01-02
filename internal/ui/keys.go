@@ -19,6 +19,10 @@ type KeyMap struct {
 	Sort    key.Binding
 	Hidden  key.Binding
 	Paste   key.Binding
+	Search  key.Binding
+	ExtFilter key.Binding
+	SizeFilter key.Binding
+	ClearFilter key.Binding
 	Confirm key.Binding
 	Cancel  key.Binding
 	Help    key.Binding
@@ -90,6 +94,22 @@ func DefaultKeyMap() KeyMap {
 		Paste: key.NewBinding(
 			key.WithKeys("p"),
 			key.WithHelp("p", "paste"),
+		),
+		Search: key.NewBinding(
+			key.WithKeys("/"),
+			key.WithHelp("/", "search"),
+		),
+		ExtFilter: key.NewBinding(
+			key.WithKeys("e"),
+			key.WithHelp("e", "ext"),
+		),
+		SizeFilter: key.NewBinding(
+			key.WithKeys("z"),
+			key.WithHelp("z", "min size"),
+		),
+		ClearFilter: key.NewBinding(
+			key.WithKeys("x"),
+			key.WithHelp("x", "clear filters"),
 		),
 		Confirm: key.NewBinding(
 			key.WithKeys("y"),

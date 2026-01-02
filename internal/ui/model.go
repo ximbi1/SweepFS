@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -53,6 +54,8 @@ type Model struct {
 	awaitingBackupName    bool
 	backupNameInput       string
 	awaitingCompression   bool
+	filterInputMode       string
+	filterInputValue      string
 	actionRunning        bool
 	actionProgressCount  int
 }
@@ -219,6 +222,8 @@ func (model Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return model.handleCompressionChoice(msg)
 	case model.awaitingBackupName:
 		return model.handleBackupNameInput(msg)
+	case model.filterInputMode != "":
+		return model.handleFilterInput(msg)
 	case model.awaitingDestination && key.Matches(msg, model.keys.Paste):
 		model.awaitingDestination = false
 		model.pendingDestination = model.state.CurrentPath()
@@ -369,6 +374,26 @@ func (model Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		model.status = "Ready - press s to scan"
 		model.ensureCursorVisible()
 		model.ensureDetailCounts()
+		return model, nil
+	case key.Matches(msg, model.keys.Search):
+		model.filterInputMode = "search"
+		model.filterInputValue = model.state.SearchQuery
+		model.status = fmt.Sprintf("Search: %s", model.filterInputValue)
+		return model, nil
+	case key.Matches(msg, model.keys.ExtFilter):
+		model.filterInputMode = "ext"
+		model.filterInputValue = model.state.FilterExt
+		model.status = fmt.Sprintf("Extension: %s", model.filterInputValue)
+		return model, nil
+	case key.Matches(msg, model.keys.SizeFilter):
+		model.filterInputMode = "size"
+		model.filterInputValue = formatSizeLabel(model.state.MinSizeBytes)
+		model.status = fmt.Sprintf("Min size: %s", model.filterInputValue)
+		return model, nil
+	case key.Matches(msg, model.keys.ClearFilter):
+		model.state.ClearFilters()
+		model.status = "Filters cleared"
+		model.ensureCursorVisible()
 		return model, nil
 	default:
 		return model, nil
@@ -571,6 +596,111 @@ func (model Model) handleCompressionChoice(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		destination += ".tar.gz"
 	}
 	return model.requestPreview(model.pendingAction, destination)
+}
+
+func (model Model) handleFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEsc:
+		model.filterInputMode = ""
+		model.filterInputValue = ""
+		model.status = "Filter cancelled"
+		return model, nil
+	case tea.KeyEnter:
+		mode := model.filterInputMode
+		value := strings.TrimSpace(model.filterInputValue)
+		model.filterInputMode = ""
+		switch mode {
+		case "search":
+			model.state.SearchQuery = value
+		case "ext":
+			model.state.FilterExt = value
+		case "size":
+			model.state.MinSizeBytes = parseSizeInput(value)
+		}
+		model.ensureCursorVisible()
+		model.status = "Filter applied"
+		return model, nil
+	case tea.KeyBackspace, tea.KeyDelete:
+		if len(model.filterInputValue) > 0 {
+			model.filterInputValue = model.filterInputValue[:len(model.filterInputValue)-1]
+		}
+	default:
+		if msg.Type == tea.KeyRunes {
+			model.filterInputValue += string(msg.Runes)
+		}
+	}
+	model.status = fmt.Sprintf("%s: %s", filterLabel(model.filterInputMode), model.filterInputValue)
+	return model, nil
+}
+
+func parseSizeInput(input string) int64 {
+	trimmed := strings.TrimSpace(strings.ToLower(input))
+	if trimmed == "" {
+		return 0
+	}
+	value := trimmed
+	multiplier := int64(1)
+	if strings.HasSuffix(trimmed, "kb") {
+		value = strings.TrimSuffix(trimmed, "kb")
+		multiplier = 1000
+	} else if strings.HasSuffix(trimmed, "k") {
+		value = strings.TrimSuffix(trimmed, "k")
+		multiplier = 1000
+	} else if strings.HasSuffix(trimmed, "mb") {
+		value = strings.TrimSuffix(trimmed, "mb")
+		multiplier = 1000 * 1000
+	} else if strings.HasSuffix(trimmed, "m") {
+		value = strings.TrimSuffix(trimmed, "m")
+		multiplier = 1000 * 1000
+	} else if strings.HasSuffix(trimmed, "gb") {
+		value = strings.TrimSuffix(trimmed, "gb")
+		multiplier = 1000 * 1000 * 1000
+	} else if strings.HasSuffix(trimmed, "g") {
+		value = strings.TrimSuffix(trimmed, "g")
+		multiplier = 1000 * 1000 * 1000
+	} else if strings.HasSuffix(trimmed, "tb") {
+		value = strings.TrimSuffix(trimmed, "tb")
+		multiplier = 1000 * 1000 * 1000 * 1000
+	} else if strings.HasSuffix(trimmed, "t") {
+		value = strings.TrimSuffix(trimmed, "t")
+		multiplier = 1000 * 1000 * 1000 * 1000
+	}
+	parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil {
+		return 0
+	}
+	return int64(parsed * float64(multiplier))
+}
+
+func filterLabel(mode string) string {
+	switch mode {
+	case "search":
+		return "Search"
+	case "ext":
+		return "Extension"
+	case "size":
+		return "Min size"
+	default:
+		return "Filter"
+	}
+}
+
+func formatSizeLabel(size int64) string {
+	if size <= 0 {
+		return ""
+	}
+	const unit = 1000
+	if size < unit {
+		return fmt.Sprintf("%dB", size)
+	}
+	div, exp := int64(unit), 0
+	for n := size / unit; n >= unit && exp < 5; n /= unit {
+		div *= unit
+		exp++
+	}
+	value := float64(size) / float64(div)
+	units := []string{"KB", "MB", "GB", "TB", "PB", "EB"}
+	return fmt.Sprintf("%.1f%s", value, units[exp])
 }
 
 func (model Model) beginScan(path string, pendingID string, focusID string) (Model, tea.Cmd) {

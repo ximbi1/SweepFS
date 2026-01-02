@@ -28,6 +28,9 @@ type State struct {
 	Tree            domain.TreeIndex
 	LastDestination string
 	KeyBindings     map[string]string
+	SearchQuery     string
+	FilterExt       string
+	MinSizeBytes    int64
 }
 
 func NewState(cfg config.Config) *State {
@@ -48,6 +51,9 @@ func NewState(cfg config.Config) *State {
 		},
 		LastDestination: cfg.LastDestination,
 		KeyBindings:     ensureBindings(cfg.KeyBindings),
+		SearchQuery:     "",
+		FilterExt:       "",
+		MinSizeBytes:    0,
 	}
 }
 
@@ -309,13 +315,43 @@ func (appState *State) appendNode(visible *[]VisibleNode, node *domain.Node, dep
 	if !appState.Prefs.ShowHidden && isHiddenName(node.Name) && node.ID != appState.Tree.RootID {
 		return
 	}
-	*visible = append(*visible, VisibleNode{Node: node, Depth: depth})
-	if node.Type != domain.NodeDir || !appState.IsExpanded(node.ID) {
+	filtering := appState.SearchQuery != "" || appState.FilterExt != "" || appState.MinSizeBytes > 0
+	if !filtering {
+		*visible = append(*visible, VisibleNode{Node: node, Depth: depth})
+		if node.Type != domain.NodeDir || !appState.IsExpanded(node.ID) {
+			return
+		}
+		children := appState.sortedChildren(node)
+		for _, child := range children {
+			appState.appendNode(visible, child, depth+1)
+		}
+		return
+	}
+	if node.Type != domain.NodeDir {
+		if appState.nodeMatches(node) {
+			*visible = append(*visible, VisibleNode{Node: node, Depth: depth})
+		}
 		return
 	}
 	children := appState.sortedChildren(node)
+	filteredChildren := make([]*domain.Node, 0, len(children))
 	for _, child := range children {
-		appState.appendNode(visible, child, depth+1)
+		if appState.nodeMatches(child) {
+			filteredChildren = append(filteredChildren, child)
+			continue
+		}
+		if child.Type == domain.NodeDir && appState.dirHasMatch(child) {
+			filteredChildren = append(filteredChildren, child)
+		}
+	}
+	if node.ID == appState.Tree.RootID || appState.nodeMatches(node) || len(filteredChildren) > 0 {
+		*visible = append(*visible, VisibleNode{Node: node, Depth: depth})
+		if !appState.IsExpanded(node.ID) {
+			return
+		}
+		for _, child := range filteredChildren {
+			appState.appendNode(visible, child, depth+1)
+		}
 	}
 }
 
@@ -355,6 +391,53 @@ func sizeFor(node *domain.Node) int64 {
 
 func isHiddenName(name string) bool {
 	return strings.HasPrefix(name, ".")
+}
+
+func (appState *State) nodeMatches(node *domain.Node) bool {
+	if node == nil {
+		return false
+	}
+	if appState.SearchQuery != "" {
+		query := strings.ToLower(appState.SearchQuery)
+		if !strings.Contains(strings.ToLower(node.Name), query) {
+			return false
+		}
+	}
+	if appState.FilterExt != "" {
+		filter := strings.ToLower(strings.TrimPrefix(appState.FilterExt, "."))
+		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(node.Name), "."))
+		if ext != filter {
+			return false
+		}
+	}
+	if appState.MinSizeBytes > 0 {
+		if sizeFor(node) < appState.MinSizeBytes {
+			return false
+		}
+	}
+	return true
+}
+
+func (appState *State) dirHasMatch(node *domain.Node) bool {
+	if node == nil || node.Type != domain.NodeDir {
+		return false
+	}
+	children := appState.sortedChildren(node)
+	for _, child := range children {
+		if appState.nodeMatches(child) {
+			return true
+		}
+		if child.Type == domain.NodeDir && appState.dirHasMatch(child) {
+			return true
+		}
+	}
+	return false
+}
+
+func (appState *State) ClearFilters() {
+	appState.SearchQuery = ""
+	appState.FilterExt = ""
+	appState.MinSizeBytes = 0
 }
 
 func (appState *State) ToggleSelection(id string) {

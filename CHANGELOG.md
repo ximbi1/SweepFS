@@ -14,3 +14,8 @@
 - Destination paste (`p`) and path autocomplete with suggestions.
 - Backup name prompt with optional compression.
 - Incremental scan cache for faster rescans.
+
+## v0.2.1
+- Fix delete to remove directories reliably and refresh listing.
+- Improve delete error messaging with first failure reason.
+- Open at current working directory when run with sudo.

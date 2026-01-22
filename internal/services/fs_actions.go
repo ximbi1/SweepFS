@@ -156,6 +156,13 @@ func (actions *FSActions) deletePaths(ctx context.Context, progress chan<- Actio
 			if err := deleteDirectory(ctx, progress, path, &result); err != nil {
 				result.Errors = append(result.Errors, err.Error())
 			}
+			if err := os.Remove(path); err != nil {
+				result.FailureCount++
+				result.Errors = append(result.Errors, err.Error())
+			} else {
+				result.SuccessCount++
+				actionProgressNonBlocking(progress, ActionProgress{Type: ActionDelete, Current: path, Processed: result.SuccessCount + result.FailureCount})
+			}
 			continue
 		}
 		if err := os.Remove(path); err != nil {
@@ -333,7 +340,7 @@ func isCriticalPath(path string) bool {
 	}
 	for _, root := range critical {
 		root = filepath.Clean(root)
-		if path == root || strings.HasPrefix(path, root+string(filepath.Separator)) {
+		if path == root {
 			return true
 		}
 	}

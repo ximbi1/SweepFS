@@ -153,12 +153,11 @@ func (actions *FSActions) deletePaths(ctx context.Context, progress chan<- Actio
 			continue
 		}
 		if info.IsDir() {
-			if err := deleteDirectory(ctx, progress, path, &result); err != nil {
-				result.Errors = append(result.Errors, err.Error())
-			}
-			if err := os.Remove(path); err != nil {
-				result.FailureCount++
-				result.Errors = append(result.Errors, err.Error())
+			if err := os.RemoveAll(path); err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					result.FailureCount++
+					result.Errors = append(result.Errors, err.Error())
+				}
 			} else {
 				result.SuccessCount++
 				actionProgressNonBlocking(progress, ActionProgress{Type: ActionDelete, Current: path, Processed: result.SuccessCount + result.FailureCount})

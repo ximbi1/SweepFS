@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -16,6 +17,9 @@ func Run() {
 	loaded, err := config.LoadConfig()
 	if err == nil {
 		base = loaded
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		base.Path = cwd
 	}
 	cfg := config.ParseFlags(base)
 	initialState := state.NewState(cfg)

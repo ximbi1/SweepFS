@@ -171,11 +171,21 @@ func (model Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		model.actionRunning = false
 		model.actionProgressCount = 0
-		model.status = fmt.Sprintf("%s (%d ok, %d failed)", typed.result.Message, typed.result.SuccessCount, typed.result.FailureCount)
+		if typed.result.FailureCount > 0 && len(typed.result.Errors) > 0 {
+			model.status = fmt.Sprintf("%s (%d ok, %d failed): %s", typed.result.Message, typed.result.SuccessCount, typed.result.FailureCount, typed.result.Errors[0])
+		} else {
+			model.status = fmt.Sprintf("%s (%d ok, %d failed)", typed.result.Message, typed.result.SuccessCount, typed.result.FailureCount)
+		}
 		model.state.ClearFilters()
-		if err := model.state.LoadListing(model.state.CurrentPath()); err == nil {
-			model.ensureCursorVisible()
-			model.ensureDetailCounts()
+		refreshPath := model.state.CurrentPath()
+		if _, err := os.Stat(refreshPath); err != nil {
+			refreshPath = parentDirPath(refreshPath)
+		}
+		if refreshPath != "" {
+			if err := model.state.LoadListing(refreshPath); err == nil {
+				model.ensureCursorVisible()
+				model.ensureDetailCounts()
+			}
 		}
 		return model, nil
 	case actionPreviewMsg:
